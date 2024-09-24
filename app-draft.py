@@ -4,16 +4,56 @@ import streamlit as st
 import joblib
 import shap
 import lime
+
+from sklearn.compose import ColumnTransformer, make_column_selector
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.impute import KNNImputer
+from sklearn.pipeline import Pipeline
 from lime.lime_tabular import LimeTabularExplainer
+
+import os
 import config
 
-from src.preprocessing import create_preprocessing_pipeline
-from src.categorical_encoder import categorical_encoder
+# Preprocessing pipeline
+def create_preprocessing_pipeline():
+
+    # Select numeric and categorical columns
+    num_cols = make_column_selector(dtype_include='number')
+    cat_cols = make_column_selector(dtype_include='object')
+
+    # Instantiate the transformers
+    scaler = StandardScaler()
+    encoder = OneHotEncoder()
+    knn_imputer = KNNImputer(n_neighbors=2, weights='uniform')
+
+    # Create pipeline
+    num_pipe = Pipeline([
+        ('scaler', scaler),
+        ('imputer', knn_imputer)
+    ])
+
+    cat_pipe = Pipeline([
+        ('encoder', encoder)
+    ])
+
+    preprocessor = ColumnTransformer([
+        ('numeric', num_pipe, num_cols),
+        ('categorical', cat_pipe, cat_cols)
+    ], remainder='drop')
+
+    return preprocessor
+
+# Encode categorical variables
+def categorical_encoder(df):
+    for column in df.select_dtypes(include=['object']).columns:
+        df[column] = pd.Categorical(df[column]).codes
+    
+    return df
 
 # Define st_shap to embed SHAP plots in Streamlit
-# def st_shap(plot):
-#    shap_html = f"<head>{shap.getjs()}</head><body>{plot.html()}</body>"
-#    st.components.v1.html(shap_html)
+def st_shap(plot):
+    shap_html = f"<head>{shap.getjs()}</head><body>{plot.html()}</body>"
+    st.components.v1.html(shap_html)
 
 @st.cache_resource # Use cache so that no need to load data every time
 # Function to load models
@@ -167,11 +207,14 @@ if st.button('Make Prediction ✨'):
     if result:
         st.write(f'### Prediction: {result}')
         
-#        # Display SHAP force plot
-#        st.write('### SHAP Force Plot:')
-#        st_shap(shap.force_plot(explainer.expected_value[0], shap_values[0], input_df_transformed[0]))
+        # Display SHAP force plot
+        st.write('### SHAP Force Plot:')
+        st_shap(shap.force_plot(explainer.expected_value[0], shap_values[0], input_df_transformed[0]))
         
         # Display LIME explanation
-        st.write('### LIME Explanation:')
-        lime_html = lime_explanation.as_html()
-        st.components.v1.html(lime_html)
+        # st.write('### LIME Explanation:')
+        # lime_html = lime_explanation.as_html()
+        # st.components.v1.html(lime_html)
+
+
+
